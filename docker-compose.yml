@@ -1,0 +1,12 @@
+version: '3.8'
+services:
+  db:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: mdabdullah
+      POSTGRES_PASSWORD: abdullah@4321
+      POSTGRES_DB: tutorstack
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
