@@ -38,17 +38,14 @@ model User {
   quizAttempts QuizAttempt[]
 
   Comment Comment[]
-
-  Rating Rating[]
+  Rating  Rating[]
 
   Message          Message[] @relation("Sender")
   receivedMessages Message[] @relation("Receiver")
 
   Notification Notification[]
-
-  Order Order[]
-
-  Certificate Certificate[]
+  Order        Order[]
+  Certificate  Certificate[]
 }
 
 model UserProfile {
@@ -57,7 +54,7 @@ model UserProfile {
   profilePic  String?
   bio         String?
   website     String?
-  location    String?
+  address     String?
   dateOfBirth DateTime?
 
   // Owns the relation
