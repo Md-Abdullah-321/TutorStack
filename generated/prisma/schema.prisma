@@ -1,0 +1,444 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+/**
+ * ✅ Core User & Access Control Models
+ */
+
+model User {
+  id          String   @id @default(cuid())
+  name        String
+  email       String   @unique
+  phoneNumber String   @unique
+  password    String
+  role        Role     @default(USER)
+  isVerified  Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  profile      UserProfile?
+  providers    AuthProvider[]
+  courses      Course[]       @relation("CourseInstructors")
+  enrollments  Enrollment[]
+  progress     Progress[]
+  quizAttempts QuizAttempt[]
+
+  Comment Comment[]
+  Rating  Rating[]
+
+  Message          Message[] @relation("Sender")
+  receivedMessages Message[] @relation("Receiver")
+
+  Notification Notification[]
+  Order        Order[]
+  Certificate  Certificate[]
+}
+
+model UserProfile {
+  id          String    @id @default(cuid())
+  userId      String    @unique
+  profilePic  String?
+  bio         String?
+  website     String?
+  address     String?
+  dateOfBirth DateTime?
+
+  // Owns the relation
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuthProvider {
+  id         String @id @default(cuid())
+  provider   String // e.g., 'google', 'github', 'credentials'
+  providerId String // e.g., Google/Facebook/GitHub unique user ID
+  userId     String
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([provider, providerId]) // Prevents duplicate accounts from same provider
+}
+
+enum Role {
+  USER
+  STUDENT
+  INSTRUCTOR
+  ADMIN
+}
+
+/**
+ * ✅ Course & Content Models
+ */
+
+model CourseCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  courses Course[]
+}
+
+model Course {
+  id           String  @id @default(cuid())
+  title        String
+  slug         String  @unique
+  description  String?
+  thumbnailUrl String?
+  level        String? // beginner, intermediate, advanced
+  language     String?
+  price        Float   @default(0.0)
+  isPublished  Boolean @default(false)
+
+  categoryId String
+  category   CourseCategory @relation(fields: [categoryId], references: [id])
+
+  instructors User[]       @relation("CourseInstructors")
+  modules     Module[]
+  quizzes     Quiz[]
+  enrollments Enrollment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Progress Progress[]
+
+  Comment Comment[]
+
+  Rating Rating[]
+
+  Order Order[]
+
+  Certificate Certificate[]
+}
+
+model Module {
+  id       String @id @default(cuid())
+  title    String
+  position Int // order in course
+  courseId String
+
+  course  Course   @relation(fields: [courseId], references: [id])
+  lessons Lesson[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Progress Progress[]
+}
+
+model Lesson {
+  id       String  @id @default(cuid())
+  title    String
+  slug     String  @unique
+  content  String?
+  videoUrl String?
+  position Int
+
+  moduleId String
+
+  module    Module           @relation(fields: [moduleId], references: [id])
+  resources LessonResource[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Progress Progress[]
+
+  Comment Comment[]
+}
+
+model LessonResource {
+  id    String       @id @default(cuid())
+  title String
+  type  ResourceType
+  url   String
+
+  lessonId String
+  lesson   Lesson @relation(fields: [lessonId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum ResourceType {
+  PDF
+  VIDEO
+  SLIDE
+  LINK
+  IMAGE
+}
+
+model Quiz {
+  id       String @id @default(cuid())
+  title    String
+  courseId String
+
+  course    Course     @relation(fields: [courseId], references: [id])
+  questions Question[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  QuizAttempt QuizAttempt[]
+}
+
+model Question {
+  id     String @id @default(cuid())
+  text   String
+  quizId String
+
+  quiz    Quiz     @relation(fields: [quizId], references: [id])
+  options Option[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Option {
+  id         String  @id @default(cuid())
+  text       String
+  isCorrect  Boolean @default(false)
+  questionId String
+
+  question Question @relation(fields: [questionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/**
+ * ✅ Enrollment & Progress Models
+ */
+
+model Enrollment {
+  id         String           @id @default(cuid())
+  userId     String
+  courseId   String
+  status     EnrollmentStatus @default(PENDING)
+  enrolledAt DateTime         @default(now())
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum EnrollmentStatus {
+  PENDING
+  ACTIVE
+  COMPLETED
+  DROPPED
+}
+
+model Progress {
+  id       String  @id @default(cuid())
+  userId   String
+  lessonId String?
+  moduleId String?
+  courseId String
+
+  progress     Float    @default(0.0) // Percentage progress (0-100)
+  lastAccessed DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id])
+  lesson Lesson? @relation(fields: [lessonId], references: [id])
+  module Module? @relation(fields: [moduleId], references: [id])
+  course Course  @relation(fields: [courseId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model QuizAttempt {
+  id        String   @id @default(cuid())
+  userId    String
+  quizId    String
+  score     Float // Score out of 100
+  attemptAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+  quiz Quiz @relation(fields: [quizId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  QuizResult QuizResult[]
+}
+
+model QuizResult {
+  id             String  @id @default(cuid())
+  quizAttemptId  String
+  correctAnswers Int // Number of correct answers
+  totalQuestions Int // Total number of questions in the quiz
+  result         String // Pass/Fail or any custom result message
+  feedback       String? // Optional feedback for the user
+
+  quizAttempt QuizAttempt @relation(fields: [quizAttemptId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/**
+ * ✅ Comments on courses/lessons Models
+ */
+
+model Comment {
+  id        String   @id @default(cuid())
+  content   String
+  userId    String
+  courseId  String?
+  lessonId  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User    @relation(fields: [userId], references: [id])
+  course Course? @relation(fields: [courseId], references: [id])
+  lesson Lesson? @relation(fields: [lessonId], references: [id])
+}
+
+model Rating {
+  id        String   @id @default(cuid())
+  score     Int      @default(0) // Rating score, e.g., 1-5
+  userId    String
+  courseId  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+}
+
+model Message {
+  id         String   @id @default(cuid())
+  content    String
+  senderId   String
+  receiverId String
+  createdAt  DateTime @default(now())
+
+  sender   User @relation("Sender", fields: [senderId], references: [id])
+  receiver User @relation("Receiver", fields: [receiverId], references: [id])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  message   String
+  userId    String
+  type      NotificationType
+  isRead    Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
+
+enum NotificationType {
+  COURSE_UPDATE
+  MESSAGE
+  SYSTEM_ALERT
+  PROGRESS_UPDATE
+}
+
+/**
+ * ✅ Payments & Certificates Models
+ */
+
+model Order {
+  id        String      @id @default(cuid())
+  userId    String
+  courseId  String
+  amount    Float
+  orderDate DateTime    @default(now())
+  status    OrderStatus @default(PENDING)
+  couponId  String?
+
+  user   User    @relation(fields: [userId], references: [id])
+  course Course  @relation(fields: [courseId], references: [id])
+  coupon Coupon? @relation(fields: [couponId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Transaction Transaction[]
+}
+
+enum OrderStatus {
+  PENDING
+  COMPLETED
+  CANCELLED
+}
+
+model Transaction {
+  id            String            @id @default(cuid())
+  orderId       String
+  transactionId String
+  amount        Float
+  status        TransactionStatus @default(PENDING)
+  paymentDate   DateTime          @default(now())
+
+  order Order @relation(fields: [orderId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum TransactionStatus {
+  PENDING
+  SUCCESS
+  FAILED
+}
+
+model Coupon {
+  id         String   @id @default(cuid())
+  code       String   @unique
+  discount   Float
+  validFrom  DateTime
+  validUntil DateTime
+  isActive   Boolean  @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  Order Order[]
+}
+
+model Certificate {
+  id             String            @id @default(cuid())
+  userId         String
+  courseId       String
+  issueDate      DateTime          @default(now())
+  certificateUrl String
+  status         CertificateStatus @default(PENDING)
+
+  user   User   @relation(fields: [userId], references: [id])
+  course Course @relation(fields: [courseId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+enum CertificateStatus {
+  PENDING
+  ISSUED
+  REVOKED
+}
